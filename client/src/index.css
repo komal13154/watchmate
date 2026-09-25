@@ -1,0 +1,122 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/*
+  WatchMate design tokens.
+  Direction: a late-night cinema, not a SaaS dashboard. Deep blue-black room,
+  a warm marquee-light accent (coral -> amber) standing in for the play button,
+  and a cool teal reserved only for "someone is here right now" signals.
+*/
+:root {
+  --wm-bg: #0a0d12;
+  --wm-bg-elevated: #10141b;
+  --wm-bg-card: #141922;
+  --wm-border: #232a35;
+  --wm-border-soft: #1a2029;
+
+  --wm-text: #edf0f4;
+  --wm-text-muted: #8b93a3;
+  --wm-text-faint: #5b6472;
+
+  --wm-accent: #ff6a45;       /* marquee coral */
+  --wm-accent-2: #ffb648;     /* amber */
+  --wm-accent-soft: rgba(255, 106, 69, 0.14);
+  --wm-accent-border: rgba(255, 106, 69, 0.4);
+
+  --wm-live: #ff3b5c;
+  --wm-presence: #2dd4bf;     /* teal, reserved for online/live-viewer signals */
+  --wm-success: #2dd4bf;
+  --wm-warning: #ffb648;
+  --wm-danger: #ff3b5c;
+
+  --wm-gradient: linear-gradient(135deg, #ff6a45 0%, #ffb648 100%);
+  --wm-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+
+  --font-display: 'Sora', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--wm-bg);
+  color: var(--wm-text);
+  font-family: var(--font-body);
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+}
+
+:focus-visible {
+  outline: 2px solid var(--wm-accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--wm-accent-soft);
+  color: var(--wm-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Reusable brand utility classes, layered on top of Tailwind */
+.wm-gradient-text {
+  background: var(--wm-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.wm-card {
+  background: var(--wm-bg-card);
+  border: 1px solid var(--wm-border);
+  border-radius: 16px;
+}
+
+.wm-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--wm-border) transparent;
+}
+.wm-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.wm-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--wm-border);
+  border-radius: 999px;
+}
+
+@keyframes wm-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.wm-live-dot {
+  animation: wm-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes wm-float-up {
+  0% { transform: translateY(0) scale(0.8); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translateY(-90px) scale(1.1); opacity: 0; }
+}
