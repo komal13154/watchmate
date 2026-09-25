@@ -25,7 +25,8 @@ export default function ParticipantList({
   onTransferHost,
 }: ParticipantListProps) {
   const [pending, setPending] = useState<PendingAction | null>(null);
-  const onlineCount = participants.filter((p) => p.online).length;
+  const onlineParticipants = participants.filter((p) => p.online);
+  const onlineCount = onlineParticipants.length;
 
   return (
     <div className="flex flex-col h-full">
@@ -34,7 +35,7 @@ export default function ParticipantList({
         <span className="text-xs text-[var(--wm-presence)]">{onlineCount} watching</span>
       </div>
       <div className="flex-1 overflow-y-auto wm-scrollbar divide-y divide-[var(--wm-border-soft)]">
-        {participants.map((p) => (
+        {onlineParticipants.map((p) => (
           <ParticipantItem
             key={p.userId}
             participant={p}

@@ -97,6 +97,12 @@ export function listLiveRooms() {
   return request<{ rooms: BackendRoom[] }>('/api/rooms/live').then(({ rooms }) => ({ rooms: rooms.map(normalizeRoom) }));
 }
 
+export function listMyRooms(token: string | null) {
+  return request<{ rooms: BackendRoom[] }>('/api/rooms/my', {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  }).then(({ rooms }) => ({ rooms: rooms.map(normalizeRoom) }));
+}
+
 export function getRoom(roomId: string) {
   return request<{ room: BackendRoom; participants?: BackendParticipant[] }>(`/api/rooms/${encodeURIComponent(roomId)}`)
     .then(({ room, participants = [] }) => ({ room: normalizeRoom(room), participants: participants.map(normalizeParticipant) }));

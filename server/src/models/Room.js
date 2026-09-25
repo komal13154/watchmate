@@ -19,6 +19,21 @@ const participantSchema = new mongoose.Schema(
   }
 );
 
+const joinRequestSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
+  { _id: false }
+);
+
 const roomSchema = new mongoose.Schema(
   {
     roomCode: {
@@ -41,6 +56,12 @@ const roomSchema = new mongoose.Schema(
       default: "private"
     },
 
+    visibility: {
+      type: String,
+      enum: ["public", "private"],
+      default: "public"
+    },
+
     isLive: {
       type: Boolean,
       default: false
@@ -59,6 +80,11 @@ const roomSchema = new mongoose.Schema(
 
     participants: {
       type: [participantSchema],
+      default: []
+    },
+
+    joinRequests: {
+      type: [joinRequestSchema],
       default: []
     },
 

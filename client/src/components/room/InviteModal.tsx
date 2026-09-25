@@ -2,16 +2,16 @@ import { useState } from 'react';
 import Button from '../common/Button';
 
 export default function InviteModal({ roomId, onClose }: { roomId: string; onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'link' | 'code' | null>(null);
   const link = `${window.location.origin}/room/${roomId}`;
 
-  async function handleCopy() {
+  async function handleCopy(value: string, type: 'link' | 'code') {
     try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(value);
+      setCopied(type);
+      setTimeout(() => setCopied(null), 2000);
     } catch {
-      setCopied(false);
+      setCopied(null);
     }
   }
 
@@ -38,7 +38,8 @@ export default function InviteModal({ roomId, onClose }: { roomId: string; onClo
           <Button variant="ghost" onClick={onClose}>
             Close
           </Button>
-          <Button onClick={handleCopy}>{copied ? 'Copied!' : 'Copy link'}</Button>
+          <Button onClick={() => handleCopy(link, 'link')}>{copied === 'link' ? 'Link copied!' : 'Copy link'}</Button>
+          <Button variant="secondary" onClick={() => handleCopy(roomId, 'code')}>{copied === 'code' ? 'Code copied!' : 'Copy code'}</Button>
         </div>
       </div>
     </div>

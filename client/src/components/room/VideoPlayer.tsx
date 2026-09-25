@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { loadYouTubeApi, formatTime, type YTPlayer } from '../../utils/youtube';
+import { loadYouTubeApi, formatTime, PlayerState, type YTPlayer } from '../../utils/youtube';
 import { EmptyState } from '../common/States';
 
 interface PlaybackEvent {
@@ -21,6 +21,12 @@ interface VideoPlayerProps {
 export default function VideoPlayer({ playbackEvent, canControl, onPlay, onPause, onSeek }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
+  const pendingEventRef = useRef<PlaybackEvent | null>(null);
+  const lastAppliedSeqRef = useRef(0);
+  const canControlRef = useRef(canControl);
+  const suppressedStateRef = useRef<{ state: number; expiresAt: number } | null>(null);
+  const suppressedSeekRef = useRef<{ time: number; expiresAt: number } | null>(null);
+  const lastSampleRef = useRef<{ time: number; state: number; at: number } | null>(null);
   const [ready, setReady] = useState(false);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -29,9 +35,76 @@ export default function VideoPlayer({ playbackEvent, canControl, onPlay, onPause
   const [seeking, setSeeking] = useState(false);
   const [seekPreview, setSeekPreview] = useState(0);
 
-  // Create the underlying YT.Player once. All chrome is custom, so we disable
-  // native controls entirely — the only thing that ever calls playVideo /
-  // pauseVideo / seekTo is the "apply remote event" effect below.
+  canControlRef.current = canControl;
+
+  function suppressState(state: number) {
+    suppressedStateRef.current = { state, expiresAt: Date.now() + 1500 };
+  }
+
+  function suppressSeek(time: number) {
+    suppressedSeekRef.current = { time, expiresAt: Date.now() + 1500 };
+  }
+
+  function applyPlaybackEvent(event: PlaybackEvent) {
+    const player = playerRef.current;
+    if (!player || event.seq <= lastAppliedSeqRef.current) return;
+    lastAppliedSeqRef.current = event.seq;
+
+    if (event.videoId && event.videoId !== videoId) {
+      setVideoId(event.videoId);
+      setCurrentTime(event.time);
+      setIsPlaying(event.isPlaying);
+      suppressSeek(event.time);
+      suppressState(event.isPlaying ? PlayerState.PLAYING : PlayerState.PAUSED);
+      if (event.isPlaying) player.loadVideoById(event.videoId, event.time);
+      else player.cueVideoById(event.videoId, event.time);
+      return;
+    }
+
+    if (event.type === 'seek' || event.type === 'sync') {
+      suppressSeek(event.time);
+      player.seekTo(event.time, true);
+      setCurrentTime(event.time);
+    }
+    if (event.type === 'play' || (event.type === 'sync' && event.isPlaying)) {
+      suppressState(PlayerState.PLAYING);
+      player.playVideo();
+      setIsPlaying(true);
+    } else if (event.type === 'pause' || (event.type === 'sync' && !event.isPlaying)) {
+      suppressState(PlayerState.PAUSED);
+      player.pauseVideo();
+      setIsPlaying(false);
+    }
+  }
+
+  function handlePlayerStateChange(state: number, player: YTPlayer) {
+    const now = Date.now();
+    const suppressed = suppressedStateRef.current;
+    if (suppressed && suppressed.expiresAt >= now && suppressed.state === state) {
+      suppressedStateRef.current = null;
+      return;
+    }
+    if (suppressed && suppressed.expiresAt < now) suppressedStateRef.current = null;
+    if (!canControlRef.current) return;
+
+    const time = player.getCurrentTime?.() ?? currentTime;
+    if (state === PlayerState.PLAYING) {
+      setIsPlaying(true);
+      setCurrentTime(time);
+      onPlay(time);
+    } else if (state === PlayerState.PAUSED) {
+      setIsPlaying(false);
+      setCurrentTime(time);
+      onPause(time);
+    } else if (state === PlayerState.ENDED) {
+      setIsPlaying(false);
+      setCurrentTime(time);
+      onPause(time);
+    }
+  }
+
+  // Native controls are enabled for the Host. The participant overlay blocks
+  // direct interaction, while server-side permissions remain authoritative.
   useEffect(() => {
     let destroyed = false;
     loadYouTubeApi().then(() => {
@@ -40,8 +113,8 @@ export default function VideoPlayer({ playbackEvent, canControl, onPlay, onPause
         height: '100%',
         width: '100%',
         playerVars: {
-          controls: 0,
-          disablekb: 1,
+          controls: canControl ? 1 : 0,
+          disablekb: canControl ? 0 : 1,
           rel: 0,
           modestbranding: 1,
           playsinline: 1,
@@ -50,7 +123,9 @@ export default function VideoPlayer({ playbackEvent, canControl, onPlay, onPause
           onReady: () => {
             playerRef.current = player;
             setReady(true);
+            if (pendingEventRef.current) applyPlaybackEvent(pendingEventRef.current);
           },
+          onStateChange: ({ data, target }) => handlePlayerStateChange(data, target),
         },
       });
     });
@@ -61,41 +136,15 @@ export default function VideoPlayer({ playbackEvent, canControl, onPlay, onPause
     };
   }, []);
 
-  // Apply remote synchronization events. This is the ONLY path that mutates the
-  // player — local button clicks below only ever emit to the server and wait
-  // for the broadcast to come back through here, which is what makes an
-  // emit -> apply feedback loop structurally impossible.
+  // Store every server event, then apply it immediately or when the player is ready.
+  // Local button clicks only emit to the server and never call this function.
   useEffect(() => {
-    if (!ready || !playerRef.current || !playbackEvent) return;
-    const player = playerRef.current;
+    pendingEventRef.current = playbackEvent;
+    if (ready && playbackEvent) applyPlaybackEvent(playbackEvent);
+  }, [playbackEvent, ready, videoId]);
 
-    if (playbackEvent.videoId && playbackEvent.videoId !== videoId) {
-      setVideoId(playbackEvent.videoId);
-      if (playbackEvent.isPlaying) {
-        player.loadVideoById(playbackEvent.videoId, playbackEvent.time);
-      } else {
-        player.cueVideoById(playbackEvent.videoId, playbackEvent.time);
-      }
-      setIsPlaying(playbackEvent.isPlaying);
-      setCurrentTime(playbackEvent.time);
-      return;
-    }
-
-    if (playbackEvent.type === 'seek' || playbackEvent.type === 'sync') {
-      player.seekTo(playbackEvent.time, true);
-      setCurrentTime(playbackEvent.time);
-    }
-    if (playbackEvent.type === 'play' || (playbackEvent.type === 'sync' && playbackEvent.isPlaying)) {
-      player.playVideo();
-      setIsPlaying(true);
-    } else if (playbackEvent.type === 'pause' || (playbackEvent.type === 'sync' && !playbackEvent.isPlaying)) {
-      player.pauseVideo();
-      setIsPlaying(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playbackEvent?.seq, ready]);
-
-  // Poll for a live time readout + duration while playing.
+  // Poll for the readout and detect native seek jumps. Normal playback progress
+  // is ignored; only a discontinuity is sent through the existing seek event.
   useEffect(() => {
     if (!ready) return;
     const interval = setInterval(() => {
@@ -103,11 +152,27 @@ export default function VideoPlayer({ playbackEvent, canControl, onPlay, onPause
       if (!player || seeking) return;
       const t = player.getCurrentTime?.();
       const d = player.getDuration?.();
+      const state = player.getPlayerState?.();
+      const now = Date.now();
       if (typeof t === 'number') setCurrentTime(t);
       if (typeof d === 'number' && d > 0) setDuration(d);
+      if (typeof t !== 'number' || typeof state !== 'number') return;
+
+      const suppressedSeek = suppressedSeekRef.current;
+      if (suppressedSeek) {
+        if (Math.abs(t - suppressedSeek.time) < 1.5 || suppressedSeek.expiresAt < now) {
+          suppressedSeekRef.current = null;
+        }
+      } else if (canControlRef.current && lastSampleRef.current) {
+        const previous = lastSampleRef.current;
+        const elapsed = (now - previous.at) / 1000;
+        const expected = previous.state === PlayerState.PLAYING ? previous.time + elapsed : previous.time;
+        if (Math.abs(t - expected) > 1.5) onSeek(t);
+      }
+      lastSampleRef.current = { time: t, state, at: now };
     }, 500);
     return () => clearInterval(interval);
-  }, [ready, seeking]);
+  }, [ready, seeking, onSeek]);
 
   function handleTogglePlay() {
     if (!canControl) return;

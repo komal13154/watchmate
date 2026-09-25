@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Logo from '../components/common/Logo';
 import Button from '../components/common/Button';
@@ -8,12 +8,8 @@ import { useIdentityGate } from '../hooks/useIdentityGate';
 import { joinRoom, listLiveRooms, ApiError } from '../services/api';
 import type { RoomSummary } from '../types';
 import { useUser } from '../context/UserContext';
-import { loadYouTubeApi, type YTPlayer } from '../utils/youtube';
 
 const CATEGORIES = ['Movies', 'Anime', 'Gaming', 'Music', 'Sports', 'Education', 'Comedy'];
-const DEMO_VIDEO_ID = "LYFBu8z3-Zw";
-const DEMO_VIDEO_START = 10;
-const DEMO_VIDEO_END = 20;
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -212,58 +208,15 @@ function RoomPreviewMock() {
 }
 
 function DemoVideo() {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let player: YTPlayer | undefined;
-    let intervalId: number | undefined;
-    let cancelled = false;
-
-    const createPlayer = () => {
-      if (cancelled || !containerRef.current || !window.YT) return;
-      player = new window.YT.Player(containerRef.current, {
-        videoId: DEMO_VIDEO_ID,
-        playerVars: {
-          autoplay: 1,
-          controls: 0,
-          disablekb: 1,
-          fs: 0,
-          iv_load_policy: 3,
-          loop: 1,
-          modestbranding: 1,
-          playsinline: 1,
-          rel: 0,
-          start: DEMO_VIDEO_START,
-          playlist: DEMO_VIDEO_ID,
-        },
-        events: {
-          onReady: ({ target }) => {
-            target.seekTo(DEMO_VIDEO_START, true);
-            target.playVideo();
-              intervalId = window.setInterval(() => {
-              if (target.getCurrentTime() >= DEMO_VIDEO_END) {
-                target.seekTo(DEMO_VIDEO_START, true);
-                target.playVideo();
-              }
-            }, 250);
-          },
-        },
-      });
-    };
-
-    loadYouTubeApi().then(createPlayer);
-
-    return () => {
-      cancelled = true;
-      if (intervalId) window.clearInterval(intervalId);
-      player?.destroy();
-    };
-  }, []);
-
   return (
-    <div
-      ref={containerRef}
-      className="absolute inset-0 pointer-events-none"
+    <video
+      src="/demo-video.mp4"
+      autoPlay
+      muted
+      loop
+      playsInline
+      controls={false}
+      className="absolute inset-0 object-cover pointer-events-none"
       aria-hidden="true"
     />
   );

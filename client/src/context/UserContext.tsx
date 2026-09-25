@@ -32,6 +32,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(() => {
     clearToken();
     localStorage.removeItem('watchmate:auth-user');
+    localStorage.removeItem('watchmate:rooms');
     setToken(null);
     setUser(null);
   }, []);

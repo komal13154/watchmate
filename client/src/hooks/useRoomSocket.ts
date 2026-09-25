@@ -18,6 +18,12 @@ export interface FloatingReaction {
   username: string;
 }
 
+export interface JoinRequest {
+  userId: string;
+  username: string;
+  createdAt?: string;
+}
+
 let seqCounter = 0;
 
 export function useRoomSocket(roomId: string | undefined, user: LocalUser | null, token: string | null) {
@@ -32,6 +38,8 @@ export function useRoomSocket(roomId: string | undefined, user: LocalUser | null
   const [myRole, setMyRole] = useState<Role | null>(null);
   const [removedNotice, setRemovedNotice] = useState(false);
   const [closedNotice, setClosedNotice] = useState<string | null>(null);
+  const [joinPending, setJoinPending] = useState(false);
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
 
   const roomIdRef = useRef(roomId);
   roomIdRef.current = roomId;
@@ -46,7 +54,11 @@ export function useRoomSocket(roomId: string | undefined, user: LocalUser | null
       socket.emit(
         'join_room',
         { roomId, username: user!.username, token },
-        (ack: { ok: boolean; message?: string; code?: string }) => {
+        (ack: { ok: boolean; pending?: boolean; message?: string; code?: string }) => {
+          if (ack?.pending) {
+            setJoinPending(true);
+            return;
+          }
           if (!ack?.ok) {
             setJoinError(ack?.message || 'Could not join this room.');
           }
@@ -72,6 +84,8 @@ export function useRoomSocket(roomId: string | undefined, user: LocalUser | null
       you: { userId: string; role: Role };
     }) {
       setRoom(payload.room);
+      setJoinPending(false);
+      setJoinError(null);
       setParticipants(payload.participants);
       setMyRole(payload.you.role);
       seqCounter += 1;
@@ -92,6 +106,30 @@ export function useRoomSocket(roomId: string | undefined, user: LocalUser | null
       });
     }
 
+    function onJoinRequestPending() {
+      setJoinPending(true);
+    }
+
+    function onJoinRequestApproved() {
+      setJoinPending(false);
+      setJoinError(null);
+    }
+
+    function onJoinRequestRejected(payload: { message?: string }) {
+      setJoinPending(false);
+      setJoinError(payload.message || 'Your request to join was rejected.');
+    }
+
+    function onJoinRequestsUpdated(payload: { requests: JoinRequest[] }) {
+      setJoinRequests(payload.requests);
+    }
+
+    function onJoinRequestReceived(request: JoinRequest) {
+      setJoinRequests((previous) => previous.some((item) => item.userId === request.userId)
+        ? previous
+        : [...previous, request]);
+    }
+
     function onUserJoined(p: Participant) {
       setMessages((prev) => [
         ...prev,
@@ -106,24 +144,18 @@ export function useRoomSocket(roomId: string | undefined, user: LocalUser | null
       ]);
     }
 
-    function onUserLeft({ userId }: { userId: string }) {
-      setParticipants((prev) => {
-        const left = prev.find((p) => p.userId === userId);
-        if (left) {
-          setMessages((msgs) => [
-            ...msgs,
-            {
-              messageId: `sys_${Date.now()}_${userId}`,
-              userId: 'system',
-              username: 'system',
-              text: `${left.username} left the party`,
-              timestamp: new Date().toISOString(),
-              system: true,
-            },
-          ]);
-        }
-        return prev;
-      });
+    function onUserLeft({ userId, username }: { userId: string; username?: string }) {
+      setMessages((msgs) => [
+        ...msgs,
+        {
+          messageId: `sys_${Date.now()}_${userId}`,
+          userId: 'system',
+          username: 'system',
+          text: `${username || 'A participant'} left the party`,
+          timestamp: new Date().toISOString(),
+          system: true,
+        },
+      ]);
     }
 
     function onPlay({ time }: { time: number }) {
@@ -162,10 +194,18 @@ export function useRoomSocket(roomId: string | undefined, user: LocalUser | null
       setRoom((prev) => (prev ? { ...prev, currentTime: time } : prev));
     }
 
-    function onVideoChanged({ videoId }: { videoId: string }) {
+    function onVideoChanged({
+      videoId,
+      time = 0,
+      isPlaying = false,
+    }: {
+      videoId: string;
+      time?: number;
+      isPlaying?: boolean;
+    }) {
       seqCounter += 1;
-      setPlaybackEvent({ seq: seqCounter, type: 'video_changed', videoId, time: 0, isPlaying: true });
-      setRoom((prev) => (prev ? { ...prev, videoId, currentTime: 0, isPlaying: true } : prev));
+      setPlaybackEvent({ seq: seqCounter, type: 'video_changed', videoId, time, isPlaying });
+      setRoom((prev) => (prev ? { ...prev, videoId, currentTime: time, isPlaying } : prev));
     }
 
     function onNewMessage(message: ChatMessage) {
@@ -208,6 +248,11 @@ export function useRoomSocket(roomId: string | undefined, user: LocalUser | null
     socket.io.on('reconnect_attempt', onReconnectAttempt);
     socket.on('sync_state', onSyncState);
     socket.on('room_state_updated', onRoomStateUpdated);
+    socket.on('join_request_pending', onJoinRequestPending);
+    socket.on('join_request_approved', onJoinRequestApproved);
+    socket.on('join_request_rejected', onJoinRequestRejected);
+    socket.on('join_requests_updated', onJoinRequestsUpdated);
+    socket.on('join_request_received', onJoinRequestReceived);
     socket.on('user_joined', onUserJoined);
     socket.on('user_left', onUserLeft);
     socket.on('play', onPlay);
@@ -233,6 +278,11 @@ export function useRoomSocket(roomId: string | undefined, user: LocalUser | null
       socket.io.off('reconnect_attempt', onReconnectAttempt);
       socket.off('sync_state', onSyncState);
       socket.off('room_state_updated', onRoomStateUpdated);
+      socket.off('join_request_pending', onJoinRequestPending);
+      socket.off('join_request_approved', onJoinRequestApproved);
+      socket.off('join_request_rejected', onJoinRequestRejected);
+      socket.off('join_requests_updated', onJoinRequestsUpdated);
+      socket.off('join_request_received', onJoinRequestReceived);
       socket.off('user_joined', onUserJoined);
       socket.off('user_left', onUserLeft);
       socket.off('play', onPlay);
@@ -276,6 +326,8 @@ export function useRoomSocket(roomId: string | undefined, user: LocalUser | null
     []
   );
   const closeRoom = useCallback(() => getSocket().emit('close_room'), []);
+  const approveJoinRequest = useCallback((userId: string) => getSocket().emit('approve_join_request', { userId }), []);
+  const rejectJoinRequest = useCallback((userId: string) => getSocket().emit('reject_join_request', { userId }), []);
 
   return {
     connectionStatus,
@@ -289,6 +341,21 @@ export function useRoomSocket(roomId: string | undefined, user: LocalUser | null
     myRole,
     removedNotice,
     closedNotice,
-    actions: { play, pause, seek, changeVideo, sendMessage, sendReaction, assignRole, removeParticipant, transferHost, closeRoom },
+    joinPending,
+    joinRequests,
+    actions: {
+      play,
+      pause,
+      seek,
+      changeVideo,
+      sendMessage,
+      sendReaction,
+      assignRole,
+      removeParticipant,
+      transferHost,
+      closeRoom,
+      approveJoinRequest,
+      rejectJoinRequest,
+    },
   };
 }

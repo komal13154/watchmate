@@ -54,8 +54,6 @@ export default function CreateRoomPage() {
           username: identity.username,
           avatar: identity.avatar,
         });
-        const recent = JSON.parse(localStorage.getItem('watchmate:rooms') || '[]') as string[];
-        localStorage.setItem('watchmate:rooms', JSON.stringify([room.roomId, ...recent.filter((id) => id !== room.roomId)].slice(0, 20)));
         navigate(`/room/${room.roomId}`);
       } catch (err) {
         if (err instanceof ApiError && err.code === 'INVALID_YOUTUBE_URL') {

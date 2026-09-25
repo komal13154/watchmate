@@ -12,6 +12,7 @@ import InviteModal from '../components/room/InviteModal';
 import ChangeVideoModal from '../components/room/ChangeVideoModal';
 import ConnectionStatusBanner from '../components/room/ConnectionStatusBanner';
 import ConfirmDialog from '../components/common/ConfirmDialog';
+import JoinRequests from '../components/room/JoinRequests';
 import { useIdentityGate } from '../hooks/useIdentityGate';
 import { useRoomSocket } from '../hooks/useRoomSocket';
 
@@ -40,6 +41,8 @@ export default function RoomPage() {
     myRole,
     removedNotice,
     closedNotice,
+    joinPending,
+    joinRequests,
     actions,
   } = useRoomSocket(roomId, user, token);
 
@@ -80,6 +83,14 @@ export default function RoomPage() {
     );
   }
 
+  if (joinPending && !room) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6">
+        <LoadingState label="Waiting for Host approval…" />
+      </div>
+    );
+  }
+
   if (!room) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -92,6 +103,8 @@ export default function RoomPage() {
   const isHost = myRole === 'HOST';
   const onlineCount = participants.filter((p) => p.online).length;
   const hostParticipant = participants.find((p) => p.role === 'HOST');
+  const activeHost = participants.some((p) => p.role === 'HOST' && p.online);
+  const canManageJoinRequests = isHost || (myRole === 'MODERATOR' && !activeHost);
 
   return (
     <div className="h-screen flex flex-col bg-[var(--wm-bg)]">
@@ -104,6 +117,14 @@ export default function RoomPage() {
         onLeave={() => setConfirmLeave(true)}
         onClose={myRole === 'HOST' ? () => setConfirmClose(true) : undefined}
       />
+
+      {canManageJoinRequests && (
+        <JoinRequests
+          requests={joinRequests}
+          onApprove={actions.approveJoinRequest}
+          onReject={actions.rejectJoinRequest}
+        />
+      )}
 
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 p-4 overflow-hidden">
         {/* Main column: player + now-watching + reactions */}
