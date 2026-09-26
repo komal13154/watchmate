@@ -24,7 +24,7 @@ export default function ChatPanel({ messages, myUserId, onSend }: ChatPanelProps
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-w-0">
       <div ref={scrollRef} className="flex-1 overflow-y-auto wm-scrollbar flex flex-col gap-2 px-1 py-2">
         {messages.length === 0 && (
           <p className="text-xs text-[var(--wm-text-faint)] text-center py-6">
@@ -52,13 +52,13 @@ export default function ChatPanel({ messages, myUserId, onSend }: ChatPanelProps
           )
         )}
       </div>
-      <form onSubmit={handleSubmit} className="flex gap-2 pt-2">
+      <form onSubmit={handleSubmit} className="flex gap-2 pt-2 min-w-0">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Type a message…"
           maxLength={500}
-          className="flex-1 rounded-lg bg-[var(--wm-bg-elevated)] border border-[var(--wm-border)] px-3 py-2 text-sm text-[var(--wm-text)] placeholder:text-[var(--wm-text-faint)] outline-none focus:border-[var(--wm-accent)]"
+          className="flex-1 min-w-0 rounded-lg bg-[var(--wm-bg-elevated)] border border-[var(--wm-border)] px-3 py-2 text-sm text-[var(--wm-text)] placeholder:text-[var(--wm-text-faint)] outline-none focus:border-[var(--wm-accent)]"
         />
         <button
           type="submit"

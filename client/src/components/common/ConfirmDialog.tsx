@@ -24,12 +24,12 @@ export default function ConfirmDialog({
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
     >
-      <div className="wm-card w-full max-w-sm p-6 flex flex-col gap-4">
+      <div className="wm-card w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6 flex flex-col gap-4">
         <h2 id="confirm-dialog-title" className="font-display font-semibold text-lg text-[var(--wm-text)]">
           {title}
         </h2>
         <p className="text-sm text-[var(--wm-text-muted)]">{message}</p>
-        <div className="flex gap-3 justify-end">
+        <div className="flex flex-wrap gap-2 justify-end">
           <Button variant="ghost" onClick={onCancel}>
             Cancel
           </Button>

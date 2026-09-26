@@ -1,14 +1,13 @@
 import jwt from "jsonwebtoken";
 import Room from "../models/Room.js";
 import User from "../models/User.js";
-import RoomRegistry from "./roomRegistry.js";
+import { roomRegistry } from "./roomRegistry.js";
 import { canControl, isHost, permissionError, roleName } from "./permissions.js";
 import { extractYouTubeId } from "../utils/youtube.js";
 
 const HOST_GRACE_MS = 15000;
 
 const socketHandler = (io) => {
-  const roomRegistry = new RoomRegistry();
   const hostGraceTimers = new Map();
   const pendingSockets = new Map();
 
@@ -27,10 +26,10 @@ const socketHandler = (io) => {
     }));
   };
 
-  const broadcastState = async (room) => io.to(room.roomCode).emit("room_state_updated", { participants: await participantsFor(room) });
-  const broadcastRoomState = async (roomCode) => {
-    const room = await Room.findOne({ roomCode });
-    if (room) await broadcastState(room);
+  const broadcastState = async (room) => {
+    const participants = await participantsFor(room);
+    io.to(room.roomCode).emit("room_state_updated", { participants });
+    return participants;
   };
   const hasActiveModerator = (roomCode) => roomRegistry.hasRole(roomCode, "moderator");
   const hasActiveHost = (roomCode) => roomRegistry.hasRole(roomCode, "host");
@@ -38,12 +37,22 @@ const socketHandler = (io) => {
     (role === "host" && room.host.toString() === socket.userId) ||
     (role === "moderator" && !hasActiveHost(room.roomCode))
   );
-  const broadcastLiveUpdate = (room) => {
+  const broadcastLiveUpdate = (room, onlineCount) => {
     io.emit("room_live_updated", {
       roomId: room.roomCode,
       isLive: room.isLive,
       closedAt: room.closedAt,
+      onlineCount,
     });
+  };
+  const broadcastParticipantLeft = async (roomCode, userId, username) => {
+    const room = await Room.findOne({ roomCode });
+    if (!room) return;
+    const participants = await participantsFor(room);
+    const onlineCount = participants.filter((participant) => participant.online).length;
+    io.to(roomCode).emit("user_left", { userId, username, roomId: roomCode, participantCount: onlineCount });
+    io.to(roomCode).emit("room_state_updated", { participants });
+    if (room.isLive) broadcastLiveUpdate(room, onlineCount);
   };
   const markRoomOffline = async (roomCode) => {
     hostGraceTimers.delete(roomCode);
@@ -90,11 +99,13 @@ const socketHandler = (io) => {
       room: {
         roomId: room.roomCode,
         name: room.name,
+        hostId: room.host.toString(),
         videoId: normalizedVideoId || room.videoId || null,
         currentTime: room.currentTime,
         isPlaying: room.playState === "playing",
         isLive: room.isLive === true,
         closedAt: room.closedAt,
+        status: room.closedAt ? "closed" : "active",
       },
       participants: await participantsFor(room),
       you: { userId: participant.user.toString(), role: roleName(participant.role) },
@@ -152,6 +163,9 @@ const socketHandler = (io) => {
         socket.userId = decoded.userId;
         socket.username = username || "Guest";
         socket.role = participant.role;
+        socket.data.roomId = room.roomCode;
+        socket.data.userId = decoded.userId;
+        socket.data.role = participant.role;
         const previousEntry = roomRegistry.get(room.roomCode, decoded.userId);
         if (previousEntry && previousEntry.socketId !== socket.id) {
           const previousSocket = io.sockets.sockets.get(previousEntry.socketId);
@@ -161,6 +175,9 @@ const socketHandler = (io) => {
             previousSocket.userId = null;
             previousSocket.username = null;
             previousSocket.role = null;
+            previousSocket.data.roomId = null;
+            previousSocket.data.userId = null;
+            previousSocket.data.role = null;
           }
         }
         roomRegistry.register({
@@ -194,17 +211,20 @@ const socketHandler = (io) => {
           room: {
             roomId: room.roomCode,
             name: room.name,
+            hostId: room.host.toString(),
             videoId: normalizedVideoId || room.videoId || null,
             currentTime: room.currentTime,
             isPlaying: room.playState === "playing",
             isLive: room.isLive === true,
             closedAt: room.closedAt,
+            status: room.closedAt ? "closed" : "active",
           },
           participants,
           you: { userId: decoded.userId, role: roleName(participant.role) },
         });
         socket.to(room.roomCode).emit("user_joined", participants.find((item) => item.userId === decoded.userId));
         await broadcastState(room);
+        if (room.isLive) broadcastLiveUpdate(room, participants.filter((item) => item.online).length);
         if (canManageJoinRequests(room, socket, socket.role)) {
           socket.emit("join_requests_updated", { requests: await pendingRequestsFor(room) });
         }
@@ -241,17 +261,23 @@ const socketHandler = (io) => {
         pendingSocket.roomId = room.roomCode;
         pendingSocket.userId = userId;
         pendingSocket.role = participant.role;
+        pendingSocket.data.roomId = room.roomCode;
+        pendingSocket.data.userId = userId;
+        pendingSocket.data.role = participant.role;
         pendingSocket.pendingRoomId = null;
         roomRegistry.register({ roomId: room.roomCode, userId, socketId: pendingSocket.id, role: participant.role });
         await emitSyncState(pendingSocket, room, participant);
         pendingSocket.emit("join_request_approved", { roomId: room.roomCode });
+        const joinedParticipant = (await participantsFor(room)).find((item) => item.userId === userId);
+        pendingSocket.to(room.roomCode).emit("user_joined", joinedParticipant);
         pendingSocket.to(room.roomCode).emit("participant_joined", {
           userId,
           username: pendingSocket.username,
           role: roleName(participant.role),
         });
       }
-      await broadcastState(room);
+      const participants = await broadcastState(room);
+      if (room.isLive) broadcastLiveUpdate(room, participants.filter((item) => item.online).length);
       await notifyJoinManagers(room);
     });
 
@@ -333,7 +359,10 @@ const socketHandler = (io) => {
       const targetEntry = roomRegistry.get(room.roomCode, targetUserId);
       const targetSocket = targetEntry ? io.sockets.sockets.get(targetEntry.socketId) : null;
       roomRegistry.updateRole(room.roomCode, targetUserId, target.role);
-      if (targetSocket) targetSocket.role = target.role;
+      if (targetSocket) {
+        targetSocket.role = target.role;
+        targetSocket.data.role = target.role;
+      }
       if (targetEntry) io.to(targetEntry.socketId).emit("role_assigned", { userId: targetUserId, role: roleName(target.role) });
       await broadcastState(room);
     });
@@ -358,10 +387,20 @@ const socketHandler = (io) => {
           targetSocket.userId = null;
           targetSocket.username = null;
           targetSocket.role = null;
+          targetSocket.data.roomId = null;
+          targetSocket.data.userId = null;
+          targetSocket.data.role = null;
         }
       }
-      socket.to(room.roomCode).emit("user_left", { userId: targetUserId, username: targetUsername });
+      const participants = await participantsFor(room);
+      socket.to(room.roomCode).emit("user_left", {
+        userId: targetUserId,
+        username: targetUsername,
+        roomId: room.roomCode,
+        participantCount: participants.filter((participant) => participant.online).length,
+      });
       await broadcastState(room);
+      if (room.isLive) broadcastLiveUpdate(room, participants.filter((item) => item.online).length);
     });
 
     socket.on("close_room", async () => {
@@ -389,10 +428,14 @@ const socketHandler = (io) => {
       await room.save();
       const targetEntry = roomRegistry.get(room.roomCode, targetUserId);
       socket.role = "moderator";
+      socket.data.role = "moderator";
       roomRegistry.updateRole(room.roomCode, socket.userId, "moderator");
       roomRegistry.updateRole(room.roomCode, targetUserId, "host");
       const targetSocket = targetEntry ? io.sockets.sockets.get(targetEntry.socketId) : null;
-      if (targetSocket) targetSocket.role = "host";
+      if (targetSocket) {
+        targetSocket.role = "host";
+        targetSocket.data.role = "host";
+      }
       if (targetEntry) io.to(targetEntry.socketId).emit("host_transferred", { userId: targetUserId });
       await broadcastState(room);
     });
@@ -422,17 +465,19 @@ const socketHandler = (io) => {
       if (!socket.roomId) return;
       const leavingRoomId = socket.roomId;
       const leavingRole = socket.role;
-      roomRegistry.unregister(socket.roomId, socket.userId, socket.id);
-      socket.to(socket.roomId).emit("user_left", { userId: socket.userId, username: socket.username });
+      const didUnregister = roomRegistry.unregister(socket.roomId, socket.userId, socket.id);
+      if (didUnregister) await broadcastParticipantLeft(leavingRoomId, socket.userId, socket.username);
       socket.leave(socket.roomId);
       socket.roomId = null;
       socket.userId = null;
       socket.username = null;
       socket.role = null;
-      if ((leavingRole === "host" && !hasActiveModerator(leavingRoomId)) || (leavingRole === "moderator" && !hasActiveHost(leavingRoomId))) {
+      socket.data.roomId = null;
+      socket.data.userId = null;
+      socket.data.role = null;
+      if (didUnregister && ((leavingRole === "host" && !hasActiveModerator(leavingRoomId)) || (leavingRole === "moderator" && !hasActiveHost(leavingRoomId)))) {
         scheduleHostGrace(leavingRoomId);
       }
-      await broadcastRoomState(leavingRoomId);
     });
 
     socket.on("disconnect", async () => {
@@ -442,12 +487,11 @@ const socketHandler = (io) => {
       if (socket.roomId) {
         const leavingRoomId = socket.roomId;
         const leavingRole = socket.role;
-        roomRegistry.unregister(socket.roomId, socket.userId, socket.id);
-        io.to(socket.roomId).emit("user_left", { userId: socket.userId, username: socket.username });
-        if ((leavingRole === "host" && !hasActiveModerator(leavingRoomId)) || (leavingRole === "moderator" && !hasActiveHost(leavingRoomId))) {
+        const didUnregister = roomRegistry.unregister(socket.roomId, socket.userId, socket.id);
+        if (didUnregister) await broadcastParticipantLeft(leavingRoomId, socket.userId, socket.username);
+        if (didUnregister && ((leavingRole === "host" && !hasActiveModerator(leavingRoomId)) || (leavingRole === "moderator" && !hasActiveHost(leavingRoomId)))) {
           scheduleHostGrace(leavingRoomId);
         }
-        await broadcastRoomState(leavingRoomId);
       }
       console.log("Socket disconnected:", socket.id);
     });

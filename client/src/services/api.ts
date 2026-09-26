@@ -125,6 +125,7 @@ interface BackendRoom {
   name: string;
   host: { _id?: string; name?: string } | string;
   participants?: unknown[];
+  viewerCount?: number;
   hostName?: string;
   videoId?: string;
   playState?: 'playing' | 'paused';
@@ -154,7 +155,7 @@ function normalizeRoom(room: BackendRoom): RoomSummary {
     updatedAt: room.updatedAt || new Date().toISOString(),
     status: 'active',
     createdAt: room.createdAt || new Date().toISOString(),
-    viewerCount: room.participants?.length || 0,
+    viewerCount: room.viewerCount ?? room.participants?.length ?? 0,
   };
 }
 

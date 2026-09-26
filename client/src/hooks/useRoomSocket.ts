@@ -100,6 +100,9 @@ export function useRoomSocket(roomId: string | undefined, user: LocalUser | null
 
     function onRoomStateUpdated(payload: { participants: Participant[] }) {
       setParticipants(payload.participants);
+      setRoom((previous) => previous
+        ? { ...previous, viewerCount: payload.participants.filter((participant) => participant.online).length }
+        : previous);
       setMyRole((prev) => {
         const mine = payload.participants.find((p) => p.userId === user!.userId);
         return mine ? mine.role : prev;
@@ -144,7 +147,20 @@ export function useRoomSocket(roomId: string | undefined, user: LocalUser | null
       ]);
     }
 
-    function onUserLeft({ userId, username }: { userId: string; username?: string }) {
+    function onUserLeft({ userId, username, roomId: leftRoomId, participantCount }: {
+      userId: string;
+      username?: string;
+      roomId?: string;
+      participantCount?: number;
+    }) {
+      if (!leftRoomId || leftRoomId.toUpperCase() === roomId?.toUpperCase()) {
+        setParticipants((previous) => previous.map((participant) => (
+          participant.userId === userId ? { ...participant, online: false } : participant
+        )));
+        if (participantCount !== undefined) {
+          setRoom((previous) => previous ? { ...previous, viewerCount: participantCount } : previous);
+        }
+      }
       setMessages((msgs) => [
         ...msgs,
         {

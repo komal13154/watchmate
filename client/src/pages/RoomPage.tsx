@@ -16,8 +16,6 @@ import JoinRequests from '../components/room/JoinRequests';
 import { useIdentityGate } from '../hooks/useIdentityGate';
 import { useRoomSocket } from '../hooks/useRoomSocket';
 
-type MobileTab = 'people' | 'chat';
-
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
@@ -27,7 +25,6 @@ export default function RoomPage() {
   const [showChangeVideo, setShowChangeVideo] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
-  const [mobileTab, setMobileTab] = useState<MobileTab>('people');
 
   const {
     connectionStatus,
@@ -107,7 +104,7 @@ export default function RoomPage() {
   const canManageJoinRequests = isHost || (myRole === 'MODERATOR' && !activeHost);
 
   return (
-    <div className="h-screen flex flex-col bg-[var(--wm-bg)]">
+    <div className="min-h-dvh overflow-x-hidden bg-[var(--wm-bg)] flex flex-col lg:h-dvh lg:min-h-0">
       <ConnectionStatusBanner status={connectionStatus} />
       <RoomHeader
         room={room}
@@ -126,10 +123,10 @@ export default function RoomPage() {
         />
       )}
 
-      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 p-4 overflow-hidden">
+      <div className="flex-1 min-w-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] gap-4 p-3 sm:p-4 lg:min-h-0 lg:overflow-hidden">
         {/* Main column: player + now-watching + reactions */}
-        <div className="flex-1 min-w-0 flex flex-col gap-3 overflow-y-auto wm-scrollbar">
-          <div className="relative">
+        <div className="min-w-0 flex flex-col gap-3 lg:overflow-y-auto wm-scrollbar">
+          <div className="relative min-w-0">
             <VideoPlayer
               playbackEvent={playbackEvent}
               canControl={canControl}
@@ -141,7 +138,7 @@ export default function RoomPage() {
           </div>
 
           <div className="wm-card p-3 flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2 text-sm min-w-0">
+            <div className="flex items-center gap-2 text-sm min-w-0 flex-wrap">
               <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--wm-bg-elevated)] border border-[var(--wm-border)] text-[var(--wm-text-muted)] shrink-0">
                 {room.category}
               </span>
@@ -149,7 +146,7 @@ export default function RoomPage() {
                 Hosted by {hostParticipant?.username ?? '—'}
               </span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <ReactionBar onReact={actions.sendReaction} />
               {canControl && (
                 <Button size="sm" variant="secondary" onClick={() => setShowChangeVideo(true)}>
@@ -169,20 +166,9 @@ export default function RoomPage() {
           )}
         </div>
 
-        {/* Side column: participants + chat (desktop: stacked; mobile: tabbed) */}
-        <div className="lg:w-80 shrink-0 flex flex-col wm-card min-h-0 lg:h-full">
-          <div className="lg:hidden flex border-b border-[var(--wm-border-soft)]">
-            <TabButton active={mobileTab === 'people'} onClick={() => setMobileTab('people')}>
-              People ({onlineCount})
-            </TabButton>
-            <TabButton active={mobileTab === 'chat'} onClick={() => setMobileTab('chat')}>
-              Chat
-            </TabButton>
-          </div>
-
-          <div
-            className={`p-3 flex-1 min-h-0 ${mobileTab === 'people' ? 'flex' : 'hidden'} lg:flex lg:flex-col lg:h-1/2 lg:border-b lg:border-[var(--wm-border-soft)]`}
-          >
+        {/* Participant and chat panels stack below desktop and share the sidebar on desktop. */}
+        <div className="min-w-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 lg:grid-rows-2 wm-card lg:min-h-0 lg:h-full">
+          <div className="p-3 min-w-0 min-h-64 lg:min-h-0 lg:border-b lg:border-[var(--wm-border-soft)]">
             <ParticipantList
               participants={participants}
               myUserId={user.userId}
@@ -193,7 +179,7 @@ export default function RoomPage() {
             />
           </div>
 
-          <div className={`p-3 flex-1 min-h-0 ${mobileTab === 'chat' ? 'flex' : 'hidden'} lg:flex lg:flex-col lg:h-1/2`}>
+          <div className="p-3 min-w-0 min-h-72 lg:min-h-0">
             <ChatPanel messages={messages} myUserId={user.userId} onSend={actions.sendMessage} />
           </div>
         </div>
@@ -227,26 +213,5 @@ export default function RoomPage() {
         />
       )}
     </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex-1 text-sm font-medium py-2.5 border-b-2 transition-colors ${
-        active ? 'text-[var(--wm-text)] border-[var(--wm-accent)]' : 'text-[var(--wm-text-faint)] border-transparent'
-      }`}
-    >
-      {children}
-    </button>
   );
 }

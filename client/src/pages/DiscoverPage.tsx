@@ -6,6 +6,7 @@ import { listLiveRooms, ApiError } from '../services/api';
 import type { RoomSummary } from '../types';
 import { joinRoom } from '../services/api';
 import { useUser } from '../context/UserContext';
+import { connectSocket } from '../socket/socketClient';
 
 export default function DiscoverPage() {
   const navigate = useNavigate();
@@ -15,8 +16,39 @@ export default function DiscoverPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    listLiveRooms().then(({ rooms: nextRooms }) => setRooms(nextRooms.filter((room) => room.privacy === 'public')))
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Public rooms are unavailable right now.'));
+    let cancelled = false;
+    let latestRequest = 0;
+    const refreshRooms = () => {
+      const requestId = ++latestRequest;
+      listLiveRooms()
+        .then(({ rooms: nextRooms }) => {
+          if (cancelled || requestId !== latestRequest) return;
+          setRooms(nextRooms.filter((room) => room.privacy === 'public'));
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err instanceof ApiError ? err.message : 'Public rooms are unavailable right now.');
+        });
+    };
+    refreshRooms();
+    const socket = connectSocket();
+    function onRoomLiveUpdated(payload: { roomId: string; isLive: boolean; onlineCount?: number }) {
+      setRooms((previous) => {
+        const exists = previous.some((room) => room.roomId === payload.roomId);
+        if (!payload.isLive) return previous.filter((room) => room.roomId !== payload.roomId);
+        if (!exists) {
+          refreshRooms();
+          return previous;
+        }
+        return previous.map((room) => room.roomId === payload.roomId
+          ? { ...room, viewerCount: payload.onlineCount ?? room.viewerCount }
+          : room);
+      });
+    }
+    socket.on('room_live_updated', onRoomLiveUpdated);
+    return () => {
+      cancelled = true;
+      socket.off('room_live_updated', onRoomLiveUpdated);
+    };
   }, []);
 
   const visibleRooms = rooms.filter((room) => room.name.toLowerCase().includes(query.toLowerCase()));
@@ -34,10 +66,10 @@ export default function DiscoverPage() {
   }
   return (
     <div className="min-h-screen">
-      <header className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between"><button onClick={() => navigate('/home')}><Logo /></button><button onClick={() => navigate('/home')} className="text-sm text-[var(--wm-text-muted)]">Dashboard</button></header>
+      <header className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-center justify-between gap-4"><button onClick={() => navigate('/home')}><Logo /></button><button onClick={() => navigate('/home')} className="text-sm text-[var(--wm-text-muted)]">Dashboard</button></header>
       <main className="max-w-6xl mx-auto px-6 py-10">
         <p className="text-sm uppercase tracking-[0.2em] text-[var(--wm-accent)]">Open rooms</p>
-        <h1 className="font-display font-extrabold text-4xl mt-3">Explore public rooms</h1>
+        <h1 className="font-display font-extrabold text-3xl sm:text-4xl mt-3 break-words">Explore public rooms</h1>
         <p className="text-[var(--wm-text-muted)] mt-3">Browse live public parties and join without a code.</p>
         <div className="max-w-md mt-8"><Input label="Search rooms" placeholder="Find a room by name" value={query} onChange={(event) => setQuery(event.target.value)} /></div>
         {error && <p className="text-sm text-[var(--wm-danger)] mt-8">{error}</p>}

@@ -8,6 +8,7 @@ import { useIdentityGate } from '../hooks/useIdentityGate';
 import { joinRoom, listLiveRooms, ApiError } from '../services/api';
 import type { RoomSummary } from '../types';
 import { useUser } from '../context/UserContext';
+import { connectSocket } from '../socket/socketClient';
 
 const CATEGORIES = ['Movies', 'Anime', 'Gaming', 'Music', 'Sports', 'Education', 'Comedy'];
 
@@ -21,21 +22,41 @@ export default function LandingPage() {
 
   useEffect(() => {
     let cancelled = false;
-    listLiveRooms()
-      .then(({ rooms }) => {
-        if (!cancelled) setRooms(rooms);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof ApiError ? err.message : 'Could not load live parties.');
+    let latestRequest = 0;
+    const refreshRooms = () => {
+      const requestId = ++latestRequest;
+      listLiveRooms()
+        .then(({ rooms: nextRooms }) => {
+          if (cancelled || requestId !== latestRequest) return;
+          setRooms((previous) => nextRooms.map((room) => {
+            const current = previous?.find((item) => item.roomId === room.roomId);
+            return current ? { ...room, viewerCount: current.viewerCount } : room;
+          }));
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err instanceof ApiError ? err.message : 'Could not load live parties.');
+        });
+    };
+    refreshRooms();
+    const socket = connectSocket();
+    function onRoomLiveUpdated(payload: { roomId: string; isLive: boolean; onlineCount?: number }) {
+      setRooms((previous) => {
+        if (!previous) return previous;
+        const exists = previous.some((room) => room.roomId === payload.roomId);
+        if (!payload.isLive) return previous.filter((room) => room.roomId !== payload.roomId);
+        if (!exists) {
+          refreshRooms();
+          return previous;
+        }
+        return previous.map((room) => room.roomId === payload.roomId
+          ? { ...room, viewerCount: payload.onlineCount ?? room.viewerCount }
+          : room);
       });
-    const refresh = window.setInterval(() => {
-      listLiveRooms().then(({ rooms }) => {
-        if (!cancelled) setRooms(rooms);
-      }).catch(() => undefined);
-    }, 15000);
+    }
+    socket.on('room_live_updated', onRoomLiveUpdated);
     return () => {
       cancelled = true;
-      window.clearInterval(refresh);
+      socket.off('room_live_updated', onRoomLiveUpdated);
     };
   }, []);
 
@@ -65,9 +86,9 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
+      <header className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-center justify-between gap-4">
         <Logo />
-        <nav className="flex items-center gap-4">
+        <nav className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 min-w-0">
           <button
             onClick={() => navigate('/discover')}
             className="text-sm text-[var(--wm-text-muted)] hover:text-[var(--wm-text)] transition-colors"

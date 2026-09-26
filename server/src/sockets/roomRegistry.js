@@ -14,7 +14,9 @@ export default class RoomRegistry {
   unregister(roomId, userId, socketId) {
     const key = this.key(roomId, userId);
     const entry = this.entries.get(key);
-    if (entry?.socketId === socketId) this.entries.delete(key);
+    if (entry?.socketId !== socketId) return false;
+    this.entries.delete(key);
+    return true;
   }
 
   updateRole(roomId, userId, role) {
@@ -30,7 +32,13 @@ export default class RoomRegistry {
     return this.entries.has(this.key(roomId, userId));
   }
 
+  countOnline(roomId) {
+    return [...this.entries.values()].filter((entry) => entry.roomId === roomId).length;
+  }
+
   hasRole(roomId, role) {
     return [...this.entries.values()].some((entry) => entry.roomId === roomId && entry.role === role);
   }
 }
+
+export const roomRegistry = new RoomRegistry();

@@ -13,8 +13,8 @@ interface RoomHeaderProps {
 
 export default function RoomHeader({ room, onlineCount, connectionStatus, onInvite, onLeave, onClose }: RoomHeaderProps) {
   return (
-    <header className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-[var(--wm-border-soft)]">
-      <div className="flex items-center gap-3 min-w-0">
+    <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-3 sm:px-6 py-3 border-b border-[var(--wm-border-soft)]">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
         <Logo showWordmark={false} size={26} />
         <div className="min-w-0">
           <h1 className="font-display font-semibold text-sm text-[var(--wm-text)] truncate">{room.name}</h1>
@@ -29,24 +29,24 @@ export default function RoomHeader({ room, onlineCount, connectionStatus, onInvi
         </div>
       </div>
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 min-w-0">
         <ConnectionBadge status={connectionStatus} />
         <button
           onClick={onInvite}
-          className="text-sm font-medium px-3 py-1.5 rounded-lg bg-[var(--wm-bg-elevated)] border border-[var(--wm-border)] text-[var(--wm-text)] hover:border-[var(--wm-text-faint)]"
+          className="text-xs sm:text-sm font-medium px-2 sm:px-3 py-1.5 rounded-lg bg-[var(--wm-bg-elevated)] border border-[var(--wm-border)] text-[var(--wm-text)] hover:border-[var(--wm-text-faint)] whitespace-nowrap"
         >
           Invite
         </button>
         <button
           onClick={onLeave}
-          className="text-sm font-medium px-3 py-1.5 rounded-lg text-[var(--wm-text-muted)] hover:text-[var(--wm-text)] hover:bg-[var(--wm-bg-elevated)]"
+          className="text-xs sm:text-sm font-medium px-2 sm:px-3 py-1.5 rounded-lg text-[var(--wm-text-muted)] hover:text-[var(--wm-text)] hover:bg-[var(--wm-bg-elevated)] whitespace-nowrap"
         >
           Leave
         </button>
         {onClose && (
           <button
             onClick={onClose}
-            className="text-sm font-medium px-3 py-1.5 rounded-lg text-[var(--wm-danger)] hover:bg-[rgba(255,59,92,0.1)]"
+            className="text-xs sm:text-sm font-medium px-2 sm:px-3 py-1.5 rounded-lg text-[var(--wm-danger)] hover:bg-[rgba(255,59,92,0.1)] whitespace-nowrap"
           >
             Close room
           </button>

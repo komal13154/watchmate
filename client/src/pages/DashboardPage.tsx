@@ -18,9 +18,9 @@ export default function DashboardPage() {
   ];
   return (
     <div className="min-h-screen">
-      <header className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
+      <header className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap items-center justify-between gap-4">
         <button onClick={() => navigate('/home')}><Logo /></button>
-        <nav className="flex items-center gap-4">
+        <nav className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2 min-w-0">
           <button onClick={() => navigate('/home')} className="hidden md:block text-sm text-[var(--wm-text-muted)] hover:text-[var(--wm-text)]">Home</button>
           <button onClick={() => navigate('/discover')} className="text-sm text-[var(--wm-text-muted)] hover:text-[var(--wm-text)]">Discover</button>
           <button onClick={() => navigate('/join')} className="hidden sm:block text-sm text-[var(--wm-text-muted)] hover:text-[var(--wm-text)]">Join Rooms</button>
@@ -30,11 +30,11 @@ export default function DashboardPage() {
           <Button variant="ghost" size="sm" onClick={() => { signOut(); navigate('/'); }}>Logout</Button>
         </nav>
       </header>
-      <main className="max-w-6xl mx-auto px-6 py-12">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12 min-w-0">
         <p className="text-sm uppercase tracking-[0.2em] text-[var(--wm-accent)]">Your watch space</p>
-        <h1 className="font-display font-extrabold text-4xl sm:text-6xl mt-3">Good to see you, {user.username}.</h1>
+        <h1 className="font-display font-extrabold text-3xl sm:text-5xl lg:text-6xl mt-3 break-words">Good to see you, {user.username}.</h1>
         <p className="text-lg text-[var(--wm-text-muted)] mt-4 max-w-xl">Pick a room, invite your people, and press play when everyone is ready.</p>
-        <div className="grid sm:grid-cols-2 gap-4 mt-12 max-w-4xl">{actions.map((action) => <button key={action.path} onClick={() => navigate(action.path)} className={`wm-card text-left p-6 min-h-44 flex flex-col justify-between hover:border-[var(--wm-accent-border)] transition-colors ${action.accent ? 'bg-[linear-gradient(135deg,rgba(255,106,69,.16),var(--wm-bg-card))]' : ''}`}><span className="text-xs uppercase tracking-[0.16em] text-[var(--wm-text-faint)]">{action.accent ? 'Start here' : 'WatchMate'}</span><span><strong className="font-display text-xl block">{action.title}</strong><span className="text-sm text-[var(--wm-text-muted)] mt-2 block">{action.detail}</span></span></button>)}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8 sm:mt-12 max-w-4xl">{actions.map((action) => <button key={action.path} onClick={() => navigate(action.path)} className={`wm-card min-w-0 text-left p-5 sm:p-6 min-h-40 sm:min-h-44 flex flex-col justify-between hover:border-[var(--wm-accent-border)] transition-colors ${action.accent ? 'bg-[linear-gradient(135deg,rgba(255,106,69,.16),var(--wm-bg-card))]' : ''}`}><span className="text-xs uppercase tracking-[0.16em] text-[var(--wm-text-faint)]">{action.accent ? 'Start here' : 'WatchMate'}</span><span><strong className="font-display text-lg sm:text-xl block break-words">{action.title}</strong><span className="text-sm text-[var(--wm-text-muted)] mt-2 block">{action.detail}</span></span></button>)}</div>
       </main>
     </div>
   );

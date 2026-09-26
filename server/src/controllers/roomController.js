@@ -1,5 +1,6 @@
 import Room from "../models/Room.js";
 import { extractYouTubeId } from "../utils/youtube.js";
+import { roomRegistry } from "../sockets/roomRegistry.js";
 
 const generateRoomCode = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -200,7 +201,11 @@ export const listRooms = async (req, res) => {
         { visibility: { $exists: false }, privacy: "public" }
       ]
     }).select("-joinRequests").sort({ updatedAt: -1 }).limit(50);
-    return res.status(200).json({ success: true, rooms });
+    const roomsWithCounts = rooms.map((room) => ({
+      ...room.toObject(),
+      viewerCount: roomRegistry.countOnline(room.roomCode),
+    }));
+    return res.status(200).json({ success: true, rooms: roomsWithCounts });
   } catch (error) {
     console.error("List rooms error:", error);
     return res.status(500).json({ success: false, message: "Server error" });
@@ -212,10 +217,13 @@ export const listLiveRooms = async (req, res) => {
     const rooms = await Room.find({ isLive: true, closedAt: null })
       .select("-joinRequests")
       .populate("host", "name")
-      .populate("participants.user", "name")
       .sort({ updatedAt: -1 })
       .limit(50);
-    return res.status(200).json({ success: true, rooms });
+    const roomsWithCounts = rooms.map((room) => ({
+      ...room.toObject(),
+      viewerCount: roomRegistry.countOnline(room.roomCode),
+    }));
+    return res.status(200).json({ success: true, rooms: roomsWithCounts });
   } catch (error) {
     console.error("List live rooms error:", error);
     return res.status(500).json({ success: false, message: "Server error" });

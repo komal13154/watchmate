@@ -21,7 +21,7 @@ export default function InviteModal({ roomId, onClose }: { roomId: string; onClo
       role="dialog"
       aria-modal="true"
     >
-      <div className="wm-card w-full max-w-sm p-6 flex flex-col gap-4">
+      <div className="wm-card w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6 flex flex-col gap-4">
         <h2 className="font-display font-semibold text-lg text-[var(--wm-text)]">Invite friends</h2>
         <p className="text-sm text-[var(--wm-text-muted)]">Anyone with this link can join the party.</p>
 
@@ -34,7 +34,7 @@ export default function InviteModal({ roomId, onClose }: { roomId: string; onClo
           <span className="font-mono font-semibold text-[var(--wm-text)] tracking-wider">{roomId}</span>
         </div>
 
-        <div className="flex gap-3 justify-end">
+        <div className="flex flex-wrap gap-2 justify-end">
           <Button variant="ghost" onClick={onClose}>
             Close
           </Button>
